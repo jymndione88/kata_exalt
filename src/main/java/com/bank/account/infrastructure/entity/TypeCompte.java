@@ -1,4 +1,4 @@
-package com.bank.account.domain.model;
+package com.bank.account.infrastructure.entity;
 
 public enum TypeCompte {
     COURANT,

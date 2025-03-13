@@ -1,74 +1,89 @@
 package com.bank.account.domain.service;
 
-import com.bank.account.domain.exception.AccountException;
-import com.bank.account.domain.model.Operation;
-import com.bank.account.domain.model.TypeOperation;
-import com.bank.account.domain.port.in.GestionCompte;
-import com.bank.account.domain.model.Compte;
-import com.bank.account.infrastructure.adapter.persistence.CompteRepository;
-import com.bank.account.infrastructure.adapter.persistence.OperationRepository;
-import jakarta.transaction.Transactional;
-import org.springframework.stereotype.Service;
+import com.bank.account.application.exception.ExceptionFonctionnelle;
+import com.bank.account.domain.model.*;
+import com.bank.account.domain.port.in.InCompte;
+import com.bank.account.domain.port.out.OutCompte;
+import com.bank.account.domain.port.out.OutOperation;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.MessageSource;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Locale;
 import java.util.UUID;
 
-@Service
-public class CompteService implements GestionCompte {
+public class CompteService implements InCompte {
 
-    private final CompteRepository compteRepository;
-    private final OperationRepository operationRepository;
+    @Autowired
+    MessageSource messageSource;
 
-    public CompteService(CompteRepository compteRepository, OperationRepository operationRepository) {
-        this.compteRepository = compteRepository;
-        this.operationRepository = operationRepository;
+    private final OutCompte outCompte;
+    private final OutOperation outOperation;
+    @Value("${compte.livret.montant.plafond.initial}")
+    private String PLAFOND;
+    @Value("${compte.courant.montant.decouvert.initial}")
+    private String DECOUVERT;
+
+    public CompteService(OutCompte outCompte, OutOperation outOperation) {
+        this.outCompte = outCompte;
+        this.outOperation = outOperation;
     }
 
-    @Transactional
     @Override
-    public boolean deposer(UUID id, BigDecimal montant) throws AccountException {
-        Compte compte = compteRepository.findById(id)
-                .orElseThrow(() -> new AccountException("Ce compte n'existe pas."));
+    public boolean operation(Operation operation) {
+        boolean success;
+        Compte compte = outCompte.findByNumeroCompte(operation.getNumeroCompte())
+                .orElseThrow(() -> new ExceptionFonctionnelle(messageSource.getMessage("compte.non.trouve", new Object[]{operation.getNumeroCompte()}, Locale.getDefault())));
 
-        boolean success = compte.depot(montant);
+        if (TypeOperation.DEPOT.name().equalsIgnoreCase(operation.getTypeOperation().name())) {
+            success = compte.depot(operation.getMontant(), messageSource);
+        } else if (TypeOperation.RETRAIT.name().equalsIgnoreCase(operation.getTypeOperation().name())) {
+            success = compte.retrait(operation.getMontant(), messageSource);
+        }
+        else {
+            throw new ExceptionFonctionnelle(messageSource.getMessage("compte.operation.invalide", null, Locale.getDefault()));
+        }
         if (success) {
-            compteRepository.save(compte);
+            outCompte.patchCompte(compte);
 
-            //on enregistre l'operation
-            Operation operation= Operation.builder()
-                    .numeroCompte(compte.getNumeroCompte())
-                    .dateEmission(LocalDate.now())
-                    .montant(montant)
-                    .motif("A_RENSEIGNER")
-                    .typeOperation(TypeOperation.DEPOT)
-                    .build();
-            operationRepository.enregistrerOperation(operation);
+            operation.setDateOperation(LocalDate.now());
+            operation.setMotif("A_RENSEIGNER");
+            outOperation.enregistrerOperation(operation);
         }
         return success;
     }
 
-    @Transactional
     @Override
-    public boolean retirer(UUID id, BigDecimal montant) throws AccountException {
+    public Compte creerCompte(TypeCompte typeCompte) {
+      Compte compte= genererCompte(typeCompte);
+        return outCompte.creerCompte(compte)
+                .orElseThrow(() -> new ExceptionFonctionnelle(messageSource.getMessage("compte.creation.erreur", null, Locale.getDefault())));
+    }
 
-        Compte compte = compteRepository.findById(id)
-                .orElseThrow(() -> new AccountException("Ce compte n'existe pas."));
+    public Compte genererCompte(TypeCompte typeCompte){
+        UUID id= UUID.randomUUID();
+        StringBuilder numeroCompte= new StringBuilder("FR");
+        numeroCompte.append(id);
 
-        boolean success = compte.retrait(montant);
-        if (success) {
-            compteRepository.save(compte);
-
-            //on enregistre l'operation
-            Operation operation= Operation.builder()
-                    .numeroCompte(compte.getNumeroCompte())
-                    .dateEmission(LocalDate.now())
-                    .montant(montant)
-                    .motif("A_RENSEIGNER")
-                    .typeOperation(TypeOperation.RETRAIT)
+        if (TypeCompte.COURANT.toString().equalsIgnoreCase(typeCompte.toString())){
+            return CompteCourant.builder()
+                    .id(id)
+                    .numeroCompte(numeroCompte.toString())
+                    .solde(BigDecimal.ZERO)
+                    .typeCompte(TypeCompte.COURANT)
+                    .montantDecouvert(new BigDecimal(DECOUVERT))
                     .build();
-            operationRepository.enregistrerOperation(operation);
+        }else{
+            return LivretEpargne.builder()
+                    .id(id)
+                    .numeroCompte(numeroCompte.toString())
+                    .solde(BigDecimal.ZERO)
+                    .typeCompte(TypeCompte.LIVRET)
+                    .plafond(new BigDecimal(PLAFOND))
+                    .build();
         }
-        return success;
+
     }
 }

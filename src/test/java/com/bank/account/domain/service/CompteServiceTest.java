@@ -1,11 +1,11 @@
 package com.bank.account.domain.service;
 
-import com.bank.account.domain.exception.AccountException;
 import com.bank.account.domain.model.Compte;
 import com.bank.account.domain.model.CompteCourant;
-import com.bank.account.infrastructure.adapter.persistence.CompteRepository;
-import com.bank.account.infrastructure.adapter.persistence.OperationRepository;
-import org.junit.jupiter.api.AfterEach;
+import com.bank.account.domain.model.Operation;
+import com.bank.account.domain.model.TypeOperation;
+import com.bank.account.domain.port.out.OutCompte;
+import com.bank.account.domain.port.out.OutOperation;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,41 +15,42 @@ import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
 import java.util.Optional;
-import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 class CompteServiceTest {
 
     @Mock
-    private CompteRepository compteRepository;
+    private OutCompte outCompte;
 
     @Mock
-    private OperationRepository operationRepository;
+    private OutOperation outOperation;
 
     private CompteService compteService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        compteService= new CompteService(compteRepository, operationRepository);
+        compteService= new CompteService(outCompte, outOperation);
     }
 
     @Test
-    void testDeposer() throws AccountException {
+    void testOperationDepot() {
         // given
-        UUID id = UUID.randomUUID();
-        BigDecimal montant = new BigDecimal("95.00");
         Compte compte= CompteCourant.builder()
-                .montantDecouvert(new BigDecimal(100.00))
+                .montantDecouvert(new BigDecimal("100.00"))
                 .build();
-        compte.setNumeroCompte("550e8400-e29b-41d4-a716-446655440000");
-        compte.setSolde(new BigDecimal(700.00));
+        compte.setNumeroCompte("FR123456788");
+        compte.setSolde(new BigDecimal("700.00"));
 
-        Mockito.when(compteRepository.findById(id)).thenReturn(Optional.of(compte));
+        Operation operation= Operation.builder()
+                .numeroCompte(compte.getNumeroCompte())
+                .typeOperation(TypeOperation.DEPOT)
+                .montant(new BigDecimal("95.00"))
+                .build();
+
+        Mockito.when(outCompte.findByNumeroCompte(compte.getNumeroCompte())).thenReturn(Optional.of(compte));
 
         // when
-        boolean retirer= compteService.deposer(id, montant);
+        boolean retirer= compteService.operation(operation);
 
         // then
         Assertions.assertTrue(retirer);
@@ -57,25 +58,28 @@ class CompteServiceTest {
     }
 
     @Test
-    void testRetirer() throws AccountException {
+    void testOperationRetrait() {
         // given
-        UUID id = UUID.randomUUID();
-        BigDecimal montant = new BigDecimal("95.00");
         Compte compte= CompteCourant.builder()
-                .montantDecouvert(new BigDecimal(100.00))
+                .montantDecouvert(new BigDecimal("100.00"))
                 .build();
-        compte.setNumeroCompte("550e8400-e29b-41d4-a716-446655440000");
-        compte.setSolde(new BigDecimal(700.00));
+        compte.setNumeroCompte("FR123456788");
+        compte.setSolde(new BigDecimal("700.00"));
 
-        Mockito.when(compteRepository.findById(id)).thenReturn(Optional.of(compte));
+        Operation operation= Operation.builder()
+                .numeroCompte(compte.getNumeroCompte())
+                .typeOperation(TypeOperation.RETRAIT)
+                .montant(new BigDecimal("95.00"))
+                .build();
+
+        Mockito.when(outCompte.findByNumeroCompte(compte.getNumeroCompte())).thenReturn(Optional.of(compte));
 
         // when
-       boolean retirer= compteService.retirer(id, montant);
+        boolean retirer= compteService.operation(operation);
 
         // then
         Assertions.assertTrue(retirer);
         Assertions.assertEquals(new BigDecimal("605.00"), compte.getSolde());
     }
-
 
 }

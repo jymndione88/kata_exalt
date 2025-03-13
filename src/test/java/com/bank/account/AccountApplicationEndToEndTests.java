@@ -1,17 +1,24 @@
 package com.bank.account;
 
+import com.bank.account.domain.model.TypeCompte;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
 
 import java.math.BigDecimal;
-import java.util.UUID;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
@@ -23,74 +30,94 @@ class AccountApplicationEndToEndTests {
 	@Autowired
 	private TestRestTemplate restTemplate;
 
+	@Autowired
+	MessageSource messageSource;
+
 	@Test
-	public void doitCreerDepot() {
+    @Order(1)
+	public void doitCreerOperationDepot() {
 		// Given
-		UUID id = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+		String numeroCompte = "FR123456788";
 		BigDecimal montant = new BigDecimal("100.00");
 
+        Map<String, Object> operation = new HashMap<>();
+        operation.put("typeOperation", "DEPOT");
+        operation.put("montant", montant);
+
 		// When
-		ResponseEntity<String> response = restTemplate.postForEntity(
-				"http://localhost:" + port + "/compte/depot/{id}?montant={montant}",
-				null,
+		String response = restTemplate.patchForObject(
+				"http://localhost:" + port + "/comptes/operation/{numeroCompte}",
+                operation,
 				String.class,
-				id,
-				montant
+				numeroCompte
 		);
 
-		Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
-		Assertions.assertEquals("Montant déposé avec succès.", response.getBody());
+		// Then
+		Assertions.assertEquals(messageSource.getMessage("message.succes.generique", new Object[]{operation.get("typeOperation"), operation.get("montant"), numeroCompte}, Locale.getDefault()), response);
 	}
 
 	@Test
+	@Order(2)
 	public void doitRetournerCompteExistePas() {
 		// Given
-		UUID id = UUID.randomUUID();
+		String numeroCompte = "FRxxx";
 		BigDecimal montant = new BigDecimal("100.00");
 
+		Map<String, Object> operation = new HashMap<>();
+		operation.put("typeOperation", "DEPOT");
+		operation.put("montant", montant);
+
 		// When
-		ResponseEntity<String> response = restTemplate.postForEntity(
-				"http://localhost:" + port + "/compte/depot/{id}?montant={montant}",
-				null,
+		String response = restTemplate.patchForObject(
+				"http://localhost:" + port + "/comptes/operation/{numeroCompte}",
+				operation,
 				String.class,
-				id,
-				montant
+				numeroCompte
 		);
 
-		Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-		Assertions.assertEquals("Ce compte n'existe pas.", response.getBody());
+		// Then
+		try {
+			JSONObject object = new JSONObject(response);
+			Assertions.assertEquals("Le compte de numero FRxxx est introuvable.", object.get("message"));
+		} catch (JSONException e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Test
-	public void doitCreerRetrait() {
+	@Order(3)
+	public void doitCreerOperationRetrait() {
 		// Given
-		UUID id = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+		String numeroCompte = "FR123456788";
 		BigDecimal montant = new BigDecimal("10.00");
 
+		Map<String, Object> operation = new HashMap<>();
+		operation.put("typeOperation", "RETRAIT");
+		operation.put("montant", montant);
+
 		// When
-		ResponseEntity<String> response = restTemplate.postForEntity(
-				"http://localhost:" + port + "/compte/retrait/{id}?montant={montant}",
-				null,
+		String response = restTemplate.patchForObject(
+				"http://localhost:" + port + "/comptes/operation/{numeroCompte}",
+				operation,
 				String.class,
-				id,
-				montant
+				numeroCompte
 		);
 
-		Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
-		Assertions.assertEquals("Montant retiré avec succès.", response.getBody());
+		// Then
+		Assertions.assertEquals(messageSource.getMessage("message.succes.generique", new Object[]{operation.get("typeOperation"), operation.get("montant"), numeroCompte}, Locale.getDefault()), response);
 	}
 
 	@Test
+	@Order(4)
 	public void doitCreerReleve() {
 		// Given
-		UUID id = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
+		String numeroCompte = "FR123456789";
 
 		// When
-		ResponseEntity<String> response = restTemplate.postForEntity(
-				"http://localhost:" + port + "/compte/releve/{id}",
-				null,
+		ResponseEntity<String> response = restTemplate.getForEntity(
+				"http://localhost:" + port + "/comptes/releve/{numeroCompte}",
 				String.class,
-				id
+				numeroCompte
 		);
 
 		Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -98,41 +125,138 @@ class AccountApplicationEndToEndTests {
 	}
 
 	@Test
+	@Order(5)
 	public void doitRetournerMontantDoitEtreSuperieur() {
 		// Given
-		UUID id = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
+		String numeroCompte = "FR123456789";
 		BigDecimal montant = new BigDecimal("-1");
 
+		Map<String, Object> operation = new HashMap<>();
+		operation.put("typeOperation", "DEPOT");
+		operation.put("montant", montant);
+
 		// When
-		ResponseEntity<String> response = restTemplate.postForEntity(
-				"http://localhost:" + port + "/compte/depot/{id}?montant={montant}",
-				null,
+		String response = restTemplate.patchForObject(
+				"http://localhost:" + port + "/comptes/operation/{numeroCompte}",
+				operation,
 				String.class,
-				id,
-				montant
+				numeroCompte
 		);
 
-		Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-		Assertions.assertEquals("Le montant du dépôt doit être supérieur à 0.", response.getBody());
+		// Then
+		try {
+			JSONObject object = new JSONObject(response);
+			Assertions.assertEquals(messageSource.getMessage("compte.montant.valide", null, Locale.getDefault()), object.get("message"));
+		} catch (JSONException e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Test
+	@Order(6)
 	public void doitRetournerSoldeInsuffisant() {
 		// Given
-		UUID id = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
+		String numeroCompte = "FR123456789";
 		BigDecimal montant = new BigDecimal("99999");
 
+		Map<String, Object> operation = new HashMap<>();
+		operation.put("typeOperation", "RETRAIT");
+		operation.put("montant", montant);
+
 		// When
-		ResponseEntity<String> response = restTemplate.postForEntity(
-				"http://localhost:" + port + "/compte/retrait/{id}?montant={montant}",
-				null,
+		String response = restTemplate.patchForObject(
+				"http://localhost:" + port + "/comptes/operation/{numeroCompte}",
+				operation,
 				String.class,
-				id,
-				montant
+				numeroCompte
 		);
 
-		Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-		Assertions.assertEquals("Votre solde est insuffisant.", response.getBody());
+		// Then
+		try {
+			JSONObject object = new JSONObject(response);
+			Assertions.assertEquals(messageSource.getMessage("compte.solde.insuffisant", null, Locale.getDefault()), object.get("message"));
+		} catch (JSONException e) {
+			throw new RuntimeException(e);
+		}
 	}
 
+	@Test
+	@Order(7)
+	public void doitRetournerPlafondAtteint() {
+		// Given
+		String numeroCompte = "FR123456789";
+		BigDecimal montant = new BigDecimal("99999");
+
+		Map<String, Object> operation = new HashMap<>();
+		operation.put("typeOperation", "DEPOT");
+		operation.put("montant", montant);
+
+		// When
+		String response = restTemplate.patchForObject(
+				"http://localhost:" + port + "/comptes/operation/{numeroCompte}",
+				operation,
+				String.class,
+				numeroCompte
+		);
+
+		// Then
+		try {
+			JSONObject object = new JSONObject(response);
+			Assertions.assertEquals(messageSource.getMessage("compte.plafond.atteint", null, Locale.getDefault()), object.get("message"));
+		} catch (JSONException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	@Test
+	@Order(8)
+	public void doitCreerCompteCOURANT() {
+		// Given
+		TypeCompte typeCompte = TypeCompte.COURANT;
+
+		// When
+		String response = restTemplate.postForObject(
+				"http://localhost:" + port + "/comptes/{typeCompte}",
+				null,
+				String.class,
+				typeCompte
+		);
+
+		// Then
+		Assertions.assertNotNull( response);
+		try {
+			JSONObject object = new JSONObject(response);
+			Assertions.assertEquals(0, Integer.valueOf(object.get("solde").toString()));
+		} catch (JSONException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	@Test
+	@Order(9)
+	public void doitRetournerBadRequest() {
+		// Given
+		String numeroCompte = "FR123456789";
+		BigDecimal montant = new BigDecimal("99999");
+
+		Map<String, Object> operation = new HashMap<>();
+		operation.put("typeOperation", "DEPOTxxx");
+		operation.put("montant", montant);
+
+		// When
+		String response = restTemplate.patchForObject(
+				"http://localhost:" + port + "/comptes/operation/{numeroCompte}",
+				operation,
+				String.class,
+				numeroCompte
+		);
+
+		// Then
+		try {
+			JSONObject object = new JSONObject(response);
+			Assertions.assertEquals(400, object.get("statut"));
+		} catch (JSONException e) {
+			throw new RuntimeException(e);
+		}
+	}
 }

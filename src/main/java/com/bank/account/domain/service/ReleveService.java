@@ -1,44 +1,46 @@
 package com.bank.account.domain.service;
 
-import com.bank.account.domain.exception.AccountException;
+import com.bank.account.application.exception.ExceptionFonctionnelle;
 import com.bank.account.domain.model.Compte;
 import com.bank.account.domain.model.Operation;
 import com.bank.account.domain.model.ReleveBancaire;
-import com.bank.account.domain.port.in.GestionOperation;
-import com.bank.account.domain.port.in.GestionReleve;
-import com.bank.account.infrastructure.adapter.persistence.CompteRepository;
-import com.bank.account.infrastructure.adapter.persistence.OperationRepository;
-import com.bank.account.infrastructure.adapter.persistence.ReleveRepository;
-import jakarta.transaction.Transactional;
-import org.springframework.stereotype.Service;
+import com.bank.account.domain.port.in.InReleve;
+import com.bank.account.domain.port.out.OutCompte;
+import com.bank.account.domain.port.out.OutOperation;
+import com.bank.account.domain.port.out.OutReleve;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.MessageSource;
 
 import java.time.LocalDate;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
-@Service
-public class ReleveService implements GestionReleve {
+public class ReleveService implements InReleve {
 
-    private final OperationService operationService;
-    private final CompteRepository compteRepository;
-    private final ReleveRepository releveRepository;
+    @Autowired
+    MessageSource messageSource;
 
-    public ReleveService(OperationService operationService, CompteRepository compteRepository, ReleveRepository releveRepository) {
-        this.operationService = operationService;
-        this.compteRepository = compteRepository;
-        this.releveRepository = releveRepository;
+    private final OutOperation outOperation;
+    private final OutCompte outCompte;
+    private final OutReleve outReleve;
+
+    public ReleveService(OutOperation outOperation, OutCompte outCompte, OutReleve outReleve) {
+        this.outOperation = outOperation;
+        this.outCompte = outCompte;
+        this.outReleve = outReleve;
     }
 
-    @Transactional
     @Override
-    public ReleveBancaire getReleveBancaire(UUID id) throws AccountException {
-        Compte compte = compteRepository.findById(id)
-                .orElseThrow(() -> new AccountException("Ce compte n'existe pas."));
+    public ReleveBancaire getReleveBancaire(String numeroCompte) {
+        Compte compte = outCompte.findByNumeroCompte(numeroCompte)
+                .orElseThrow(() -> new ExceptionFonctionnelle(messageSource.getMessage("compte.non.trouve", new Object[]{numeroCompte}, Locale.getDefault())));
 
-        List<Operation> operations= operationService.getOperationsByCompte(compte.getNumeroCompte());
+        List<Operation> operations= List.of();
+        Optional<List<Operation>> Optionaloperations= outOperation.getOperationsByCompte(compte.getNumeroCompte());
+        if(Optionaloperations.isPresent()){
+            operations= Optionaloperations.get();
+        }
 
         ReleveBancaire releve= ReleveBancaire.builder()
                 .numeroCompte(compte.getNumeroCompte())
@@ -48,7 +50,7 @@ public class ReleveService implements GestionReleve {
                 .typeCompte(compte.getTypeCompte())
                 .build();
 
-        releveRepository.sauvegarderReleve(releve);
+        outReleve.sauvegarderReleve(releve);
         return releve;
 
     }

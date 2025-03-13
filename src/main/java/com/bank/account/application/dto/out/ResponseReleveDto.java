@@ -1,26 +1,24 @@
-package com.bank.account.domain.model;
+package com.bank.account.application.dto.out;
 
-import lombok.Builder;
+import com.bank.account.domain.model.Operation;
+import com.bank.account.domain.model.TypeCompte;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
 
 @Data
-@Builder
-public class ReleveBancaire {
-
-    protected UUID id;
+public class ResponseReleveDto {
 
     protected String numeroCompte;
 
-    protected LocalDate date;
+    private LocalDate date;
 
     protected BigDecimal soldeActuel;
 
     protected List<Operation> operations;
 
     protected TypeCompte typeCompte;
+
 }

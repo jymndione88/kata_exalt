@@ -1,38 +1,41 @@
 package com.bank.account.domain.model;
 
-import com.bank.account.domain.exception.AccountException;
-import jakarta.persistence.Column;
-import jakarta.persistence.DiscriminatorValue;
-import jakarta.persistence.Entity;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.NoArgsConstructor;
+import com.bank.account.application.exception.ExceptionFonctionnelle;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
+import org.springframework.context.MessageSource;
 
 import java.math.BigDecimal;
+import java.util.Locale;
+import java.util.UUID;
 
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-@Entity
-@DiscriminatorValue("COURANT")
+@SuperBuilder
 public class CompteCourant extends Compte {
 
-    @Column(nullable = true)
-    private BigDecimal montantDecouvert;
+    protected BigDecimal montantDecouvert;
+
+    public CompteCourant(UUID id, String numeroCompte, BigDecimal solde, TypeCompte typeCompte, BigDecimal montantDecouvert) {
+        super(id, numeroCompte, solde, typeCompte);
+        this.montantDecouvert = montantDecouvert;
+    }
 
     @Override
-    public boolean depot(BigDecimal montant) throws AccountException {
-    if(montant ==  null || montant.compareTo(BigDecimal.ZERO)<= 0){
-            throw new AccountException("Le montant doit être supérieur à 0.");
+    public boolean depot(BigDecimal montant, MessageSource messageSource)  {
+        if(montant ==  null || montant.compareTo(BigDecimal.ZERO)<= 0){
+            throw new ExceptionFonctionnelle(messageSource.getMessage("compte.montant.valide", null,Locale.getDefault()));
         }
         solde= solde.add(montant);
         return true;
     }
 
     @Override
-    public boolean retrait(BigDecimal montant) throws AccountException {
+    public boolean retrait(BigDecimal montant, MessageSource messageSource)  {
         if (montant.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new AccountException("Le montant doit être supérieur à 0.");
+            throw new ExceptionFonctionnelle(messageSource.getMessage("compte.montant.valide", null,Locale.getDefault()));
         }
         if (solde.add(montantDecouvert).compareTo(montant) >= 0) {
             if(solde.compareTo(montant)>= 0){
@@ -45,7 +48,7 @@ public class CompteCourant extends Compte {
             }
             return true;
         }else {
-            throw new AccountException("Votre solde est insuffisant.");
+            throw new ExceptionFonctionnelle(messageSource.getMessage("compte.solde.insuffisant", null,Locale.getDefault()));
         }
     }
 }
